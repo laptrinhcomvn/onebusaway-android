@@ -16,18 +16,19 @@
 
 package org.onebusaway.android.ui;
 
-import org.onebusaway.android.R;
-import org.onebusaway.android.io.ObaAnalytics;
-
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.support.design.widget.CollapsingToolbarLayout;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
 import android.widget.TextView;
+
+import com.google.android.material.appbar.CollapsingToolbarLayout;
+
+import org.onebusaway.android.R;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 /**
  * An Activity that displays version, license, and contributor information
@@ -75,11 +76,5 @@ public class AboutActivity extends AppCompatActivity {
         builder.append("\n\n");
 
         tv.setText(builder.toString());
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        ObaAnalytics.reportActivityStart(this);
     }
 }

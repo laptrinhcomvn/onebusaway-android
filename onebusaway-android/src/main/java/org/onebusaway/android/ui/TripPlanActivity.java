@@ -17,6 +17,24 @@
  */
 package org.onebusaway.android.ui;
 
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.location.Location;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.widget.ListView;
+import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+
+import com.google.firebase.analytics.FirebaseAnalytics;
 import com.sothree.slidinguppanel.ScrollableViewHelper;
 import com.sothree.slidinguppanel.SlidingUpPanelLayout;
 
@@ -26,29 +44,14 @@ import org.onebusaway.android.directions.tasks.TripRequest;
 import org.onebusaway.android.directions.util.OTPConstants;
 import org.onebusaway.android.directions.util.TripRequestBuilder;
 import org.onebusaway.android.io.ObaAnalytics;
+import org.onebusaway.android.travelbehavior.TravelBehaviorManager;
 import org.onebusaway.android.util.LocationUtils;
 import org.onebusaway.android.util.UIUtils;
 import org.opentripplanner.api.model.Itinerary;
+import org.opentripplanner.api.model.TripPlan;
 import org.opentripplanner.api.ws.Message;
 
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.location.Location;
-import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v7.app.AppCompatActivity;
-import android.text.TextUtils;
-import android.view.MenuItem;
-import android.view.View;
-import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
-import android.widget.ListView;
-import android.widget.Toast;
-
 import java.util.ArrayList;
-import java.util.List;
 
 
 public class TripPlanActivity extends AppCompatActivity implements TripRequest.Callback,
@@ -82,6 +85,8 @@ public class TripPlanActivity extends AppCompatActivity implements TripRequest.C
 
     boolean mRequestLoading = false;
 
+    private FirebaseAnalytics mFirebaseAnalytics;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -89,6 +94,8 @@ public class TripPlanActivity extends AppCompatActivity implements TripRequest.C
         setContentView(R.layout.activity_trip_plan);
 
         UIUtils.setupActionBar(this);
+
+        mFirebaseAnalytics = FirebaseAnalytics.getInstance(this);
 
         Bundle bundle = (savedInstanceState == null) ? new Bundle() : savedInstanceState;
         mBuilder = new TripRequestBuilder(bundle);
@@ -150,7 +157,7 @@ public class TripPlanActivity extends AppCompatActivity implements TripRequest.C
             fragment.setArguments(bundle);
             fragment.setListener(this);
             getSupportFragmentManager().beginTransaction()
-                    .add(R.id.trip_plan_fragment_container, fragment).commit();
+                    .add(R.id.trip_plan_fragment_container, fragment, TripPlanFragment.TAG).commit();
         }
 
         mPanel = (SlidingUpPanelLayout) findViewById(R.id.trip_plan_sliding_layout);
@@ -278,9 +285,9 @@ public class TripPlanActivity extends AppCompatActivity implements TripRequest.C
         bundle.remove(OTPConstants.ITINERARIES);
         bundle.remove(OTPConstants.SELECTED_ITINERARY);
 
-        ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.SUBMIT.toString(),
-                        getString(R.string.analytics_action_trip_plan),
-                        getString(R.string.analytics_label_trip_plan));
+        ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                getString(R.string.analytics_label_trip_plan),
+                null);
 
         showProgressDialog();
     }
@@ -304,12 +311,13 @@ public class TripPlanActivity extends AppCompatActivity implements TripRequest.C
     }
 
     @Override
-    public void onTripRequestComplete(List<Itinerary> itineraries, String url) {
+    public void onTripRequestComplete(TripPlan tripPlan, String url) {
+        TravelBehaviorManager.saveTripPlan(tripPlan, url, getApplicationContext());
         // Send intent to ourselves...
         Intent intent = new Intent(this, TripPlanActivity.class)
                 .setAction(Intent.ACTION_MAIN)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(OTPConstants.ITINERARIES, (ArrayList<Itinerary>) itineraries)
+                .putExtra(OTPConstants.ITINERARIES, (ArrayList<Itinerary>) tripPlan.getItinerary())
                 .putExtra(OTPConstants.INTENT_SOURCE, OTPConstants.Source.ACTIVITY)
                 .putExtra(PLAN_REQUEST_URL, url);
         startActivity(intent);
@@ -361,10 +369,9 @@ public class TripPlanActivity extends AppCompatActivity implements TripRequest.C
                                 }
                                 UIUtils.sendEmail(TripPlanActivity.this, email, locString, url,
                                         true);
-                                ObaAnalytics.reportEventWithCategory(
-                                        ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                                        getString(R.string.analytics_action_problem),
-                                        getString(R.string.analytics_label_app_feedback_otp));
+                                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                                        getString(R.string.analytics_label_app_feedback_otp),
+                                        null);
                             } else {
                                 Toast.makeText(TripPlanActivity.this,
                                         getString(R.string.tripplanner_no_contact),

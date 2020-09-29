@@ -26,7 +26,7 @@ import org.onebusaway.android.mock.MockRegion;
 
 import java.util.HashMap;
 
-import static android.support.test.InstrumentationRegistry.getTargetContext;
+import static androidx.test.InstrumentationRegistry.getTargetContext;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNotNull;
 
@@ -58,7 +58,7 @@ public class TripRequestTest extends ObaTestCase {
         ObaTripRequest.Builder builder = new ObaTripRequest.Builder(getTargetContext(), TEST_TRIP_ID);
         ObaTripRequest request = builder.build();
         UriAssert.assertUriMatch(
-                "http://api.pugetsound.onebusaway.org/api/where/trip/" + TEST_TRIP_ID + ".json",
+                "https://api.pugetsound.onebusaway.org/api/where/trip/" + TEST_TRIP_ID + ".json",
                 new HashMap<String, String>() {{
                     put("key", "*");
                     put("version", "2");
@@ -102,7 +102,7 @@ public class TripRequestTest extends ObaTestCase {
         // This is just to make sure we copy and call newRequest() at least once
         ObaTripRequest request = ObaTripRequest.newRequest(getTargetContext(), TEST_TRIP_ID);
         UriAssert.assertUriMatch(
-                "http://api.pugetsound.onebusaway.org/api/where/trip/" + TEST_TRIP_ID + ".json",
+                "https://api.pugetsound.onebusaway.org/api/where/trip/" + TEST_TRIP_ID + ".json",
                 new HashMap<String, String>() {{
                     put("key", "*");
                     put("version", "2");

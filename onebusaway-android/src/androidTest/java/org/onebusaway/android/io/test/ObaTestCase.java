@@ -24,9 +24,9 @@ import org.onebusaway.android.io.ObaApi;
 import org.onebusaway.android.io.request.ObaResponse;
 import org.onebusaway.android.mock.ObaMock;
 
-import android.support.test.runner.AndroidJUnit4;
+import androidx.test.runner.AndroidJUnit4;
 
-import static android.support.test.InstrumentationRegistry.getTargetContext;
+import static androidx.test.InstrumentationRegistry.getTargetContext;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNotNull;
 
@@ -45,6 +45,10 @@ public abstract class ObaTestCase {
 
     @Before
     public void before() {
+        // Workaround for #940 - when Embedded Social no longer runs services in the background the
+        // call to setUpSocial() can be removed here in favor of early init in Application (see #957)
+        Application.get().setUpSocial();
+
         // The theme needs to be set when using "attr/?" elements - see #279
         getTargetContext().setTheme(R.style.Theme_OneBusAway);
 

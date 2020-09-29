@@ -16,8 +16,28 @@
  */
 package org.onebusaway.android.map.googlemapsv2;
 
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.Dialog;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.graphics.drawable.Drawable;
+import android.location.Location;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.provider.Settings;
+import android.text.TextUtils;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.CheckBox;
+import android.widget.Toast;
+
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.LocationSource;
@@ -31,6 +51,7 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.VisibleRegion;
+import com.google.firebase.analytics.FirebaseAnalytics;
 
 import org.onebusaway.android.R;
 import org.onebusaway.android.app.Application;
@@ -51,41 +72,27 @@ import org.onebusaway.android.map.StopMapController;
 import org.onebusaway.android.map.bike.BikeshareMapController;
 import org.onebusaway.android.map.googlemapsv2.bike.BikeStationOverlay;
 import org.onebusaway.android.region.ObaRegionsTask;
+import org.onebusaway.android.ui.HomeActivity;
 import org.onebusaway.android.ui.LayersSpeedDialAdapter;
 import org.onebusaway.android.util.LocationHelper;
 import org.onebusaway.android.util.LocationUtils;
+import org.onebusaway.android.util.PermissionUtils;
 import org.onebusaway.android.util.PreferenceUtils;
 import org.onebusaway.android.util.UIUtils;
 import org.opentripplanner.routing.bike_rental.BikeRentalStation;
-
-import android.app.Activity;
-import android.app.Dialog;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.graphics.drawable.Drawable;
-import android.location.Location;
-import android.os.Bundle;
-import android.os.Handler;
-import android.preference.PreferenceManager;
-import android.provider.Settings;
-import android.support.v4.graphics.drawable.DrawableCompat;
-import android.support.v7.app.AlertDialog;
-import android.text.TextUtils;
-import android.util.Log;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.CheckBox;
-import android.widget.CompoundButton;
-import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.fragment.app.DialogFragment;
+
+import static org.onebusaway.android.util.PermissionUtils.LOCATION_PERMISSIONS;
+import static org.onebusaway.android.util.PermissionUtils.LOCATION_PERMISSION_REQUEST;
 
 /**
  * The MapFragment class is split into two basic modes:
@@ -113,6 +120,8 @@ public class BaseMapFragment extends SupportMapFragment
     public static final String TAG = "BaseMapFragment";
 
     private static final int REQUEST_NO_LOCATION = 41;
+
+    private static final String USER_DENIED_PERMISSION = ".UserDeniedPermission";
 
     //
     // Location Services and Maps API v2 constants
@@ -171,9 +180,16 @@ public class BaseMapFragment extends SupportMapFragment
     // Listen to map loading/progress bar events
     OnProgressBarChangedListener mOnProgressBarChangedListener;
 
+    // Listen to location permission request results
+    OnLocationPermissionResultListener mOnLocationPermissionResultListener;
+
     LocationHelper mLocationHelper;
 
     Bundle mLastSavedInstanceState;
+
+    private boolean mUserDeniedPermission = false;
+
+    private FirebaseAnalytics mFirebaseAnalytics;
 
     @Override
     public void onActivateLayer(LayerInfo layer) {
@@ -182,10 +198,8 @@ public class BaseMapFragment extends SupportMapFragment
                 for (MapModeController controller : mControllers) {
                     if (controller instanceof BikeshareMapController) {
                         ((BikeshareMapController) controller).showBikes(true);
-
-                        ObaAnalytics.reportEventWithCategory(
-                                ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                                getString(R.string.analytics_action_layer_bikeshare),
+                        ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                                getString(R.string.analytics_layer_bikeshare),
                                 getString(R.string.analytics_label_bikeshare_activated));
                     }
                 }
@@ -201,10 +215,8 @@ public class BaseMapFragment extends SupportMapFragment
                 for (MapModeController controller : mControllers) {
                     if (controller instanceof BikeshareMapController) {
                         ((BikeshareMapController) controller).showBikes(false);
-
-                        ObaAnalytics.reportEventWithCategory(
-                                ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                                getString(R.string.analytics_action_layer_bikeshare),
+                        ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                                getString(R.string.analytics_layer_bikeshare),
                                 getString(R.string.analytics_label_bikeshare_deactivated));
                     }
                 }
@@ -247,6 +259,15 @@ public class BaseMapFragment extends SupportMapFragment
         void onProgressBarChanged(boolean showProgressBar);
     }
 
+    public interface OnLocationPermissionResultListener {
+
+        /**
+         * Called when a result has been obtained after requesting user location permission.
+         * @param grantResult The grant results for the location permission which is either PackageManager.PERMISSION_GRANTED or PackageManager.PERMISSION_DENIED. Never null.
+         */
+        void onLocationPermissionResult(int grantResult);
+    }
+
     public static BaseMapFragment newInstance() {
         return new BaseMapFragment();
     }
@@ -256,8 +277,13 @@ public class BaseMapFragment extends SupportMapFragment
                              Bundle savedInstanceState) {
         View v = super.onCreateView(inflater, container, savedInstanceState);
 
+        mFirebaseAnalytics = FirebaseAnalytics.getInstance(getActivity());
+
+        if (savedInstanceState != null) {
+            savedInstanceState.getBoolean(USER_DENIED_PERMISSION, false);
+        }
+
         mLocationHelper = new LocationHelper(getActivity());
-        mLocationHelper.registerListener(this);
 
         if (MapHelpV2.isMapsInstalled(getActivity())) {
             // Save the savedInstanceState
@@ -302,10 +328,15 @@ public class BaseMapFragment extends SupportMapFragment
     }
 
     private void initMap(Bundle savedInstanceState) {
-
         UiSettings uiSettings = mMap.getUiSettings();
-        // Show the location on the map
-        mMap.setMyLocationEnabled(true);
+
+        if (!mUserDeniedPermission) {
+            requestPermissionAndInit(getActivity());
+        } else {
+            // Explain permission to user
+            UIUtils.showLocationPermissionDialog(this);
+        }
+
         // Set location source
         mMap.setLocationSource(this);
         // Listener for camera changes
@@ -353,8 +384,49 @@ public class BaseMapFragment extends SupportMapFragment
         setMapMode(mode, args);
     }
 
+    @SuppressLint("MissingPermission")
+    private void requestPermissionAndInit(final Activity activity) {
+        if (PermissionUtils.hasGrantedPermissions(activity, LOCATION_PERMISSIONS)) {
+            // Show the location on the map
+            mMap.setMyLocationEnabled(true);
+            // Make sure location helper is registered
+            mLocationHelper.registerListener(this);
+        } else {
+            // Request permissions from the user
+            requestPermissions(LOCATION_PERMISSIONS, LOCATION_PERMISSION_REQUEST);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode, String[] permissions, int[] grantResults) {
+        int result = PackageManager.PERMISSION_DENIED;
+        if (requestCode == LOCATION_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                mUserDeniedPermission = false;
+                // Show the location on the map
+                mMap.setMyLocationEnabled(true);
+                // Make sure location helper is registered
+                mLocationHelper.registerListener(this);
+                result = PackageManager.PERMISSION_GRANTED;
+            } else {
+                mUserDeniedPermission = true;
+            }
+        } else if (HomeActivity.BATTERY_OPTIMIZATIONS_PERMISSION_REQUEST == requestCode) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                UIUtils.openBatteryIgnoreIntent(getActivity());
+            }
+        }
+
+        if (requestCode == LOCATION_PERMISSION_REQUEST && mOnLocationPermissionResultListener != null) {
+            mOnLocationPermissionResultListener.onLocationPermissionResult(result);
+        }
+    }
+
     @Override
     public void onDestroy() {
+        mLocationHelper.unregisterListener(this);
         if (mControllers != null) {
             for (MapModeController controller : mControllers) {
                 controller.destroy();
@@ -435,6 +507,7 @@ public class BaseMapFragment extends SupportMapFragment
         outState.putInt(MapParams.MAP_PADDING_TOP, mMapPaddingTop);
         outState.putInt(MapParams.MAP_PADDING_RIGHT, mMapPaddingRight);
         outState.putInt(MapParams.MAP_PADDING_BOTTOM, mMapPaddingBottom);
+        outState.putBoolean(USER_DENIED_PERMISSION, mUserDeniedPermission);
     }
 
     @Override
@@ -670,13 +743,17 @@ public class BaseMapFragment extends SupportMapFragment
         Location l = Application
                 .getLastKnownLocation(getActivity(), mLocationHelper.getGoogleApiClient());
         // If the region changed, and we don't have a location or the map center is still (0,0),
-        // then zoom to the region
+        // then zoom to the region (or location if we have it)
         Location mapCenter = getMapCenterAsLocation();
         if (currentRegionChanged &&
                 (l == null ||
                         (mapCenter != null && mapCenter.getLatitude() == 0.0 &&
                                 mapCenter.getLongitude() == 0.0))) {
-            zoomToRegion();
+            if (l != null) {
+                setMyLocation(true, false);
+            } else {
+                zoomToRegion();
+            }
         }
     }
 
@@ -687,6 +764,10 @@ public class BaseMapFragment extends SupportMapFragment
     public void setOnProgressBarChangedListener(
             OnProgressBarChangedListener onProgressBarChangedListener) {
         mOnProgressBarChangedListener = onProgressBarChangedListener;
+    }
+
+    public void setOnLocationPermissionResultListener(OnLocationPermissionResultListener onLocationPermissionResultListener) {
+        mOnLocationPermissionResultListener = onLocationPermissionResultListener;
     }
 
     //
@@ -745,9 +826,14 @@ public class BaseMapFragment extends SupportMapFragment
 
         Location lastLocation = Application.getLastKnownLocation(getActivity(), apiClient);
         if (lastLocation == null) {
+            String text;
+            if (!PermissionUtils.hasGrantedPermissions(Application.get(), LOCATION_PERMISSIONS)) {
+                text = getResources().getString(R.string.no_location_permission);
+            } else {
+                text = getResources().getString(R.string.main_waiting_for_location);
+            }
             Toast.makeText(getActivity(),
-                    getResources()
-                            .getString(R.string.main_waiting_for_location),
+                    text,
                     Toast.LENGTH_SHORT).show();
             return false;
         }
@@ -1163,7 +1249,7 @@ public class BaseMapFragment extends SupportMapFragment
     // Dialogs
     //
 
-    public static class MapDialogFragment extends android.support.v4.app.DialogFragment {
+    public static class MapDialogFragment extends DialogFragment {
 
         private static final String TAG = "MapDialogFragment";
 
@@ -1225,22 +1311,16 @@ public class BaseMapFragment extends SupportMapFragment
                                     Application.get().getCurrentRegion().getName() : ""
                     ))
                     .setPositiveButton(R.string.main_outofrange_yes,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    if (mMapFragment != null && mMapFragment.isAdded()) {
-                                        mMapFragment.zoomToRegion();
-                                    }
+                            (dialog, which) -> {
+                                if (mMapFragment != null && mMapFragment.isAdded()) {
+                                    mMapFragment.zoomToRegion();
                                 }
                             }
                     )
                     .setNegativeButton(R.string.main_outofrange_no,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    if (mMapFragment != null && mMapFragment.isAdded()) {
-                                        mMapFragment.mWarnOutOfRange = false;
-                                    }
+                            (dialog, which) -> {
+                                if (mMapFragment != null && mMapFragment.isAdded()) {
+                                    mMapFragment.mWarnOutOfRange = false;
                                 }
                             }
                     );
@@ -1250,14 +1330,11 @@ public class BaseMapFragment extends SupportMapFragment
         @SuppressWarnings("deprecation")
         private Dialog createNoLocationDialog() {
             View view = getActivity().getLayoutInflater().inflate(R.layout.no_location_dialog, null);
-            CheckBox neverShowDialog = (CheckBox) view.findViewById(R.id.location_never_ask_again);
+            CheckBox neverShowDialog = view.findViewById(R.id.location_never_ask_again);
 
-            neverShowDialog.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                    // Save the preference
-                    PreferenceUtils.saveBoolean(getString(R.string.preference_key_never_show_location_dialog), isChecked);
-                }
+            neverShowDialog.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+                // Save the preference
+                PreferenceUtils.saveBoolean(getString(R.string.preference_key_never_show_location_dialog), isChecked);
             });
 
             Drawable icon = getResources().getDrawable(android.R.drawable.ic_dialog_map);
@@ -1269,24 +1346,16 @@ public class BaseMapFragment extends SupportMapFragment
                     .setCancelable(false)
                     .setView(view)
                     .setPositiveButton(R.string.rt_yes,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    startActivityForResult(
-                                            new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
-                                            REQUEST_NO_LOCATION);
-                                }
-                            }
+                            (dialog, which) -> startActivityForResult(
+                                    new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
+                                    REQUEST_NO_LOCATION)
                     )
                     .setNegativeButton(R.string.rt_no,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    // Ok, I suppose we can just try looking from where we
-                                    // are.
-                                    for (MapModeController controller : mMapFragment.mControllers) {
-                                        controller.onLocation();
-                                    }
+                            (dialog, which) -> {
+                                // Ok, I suppose we can just try looking from where we
+                                // are.
+                                for (MapModeController controller : mMapFragment.mControllers) {
+                                    controller.onLocation();
                                 }
                             }
                     );
@@ -1329,9 +1398,7 @@ public class BaseMapFragment extends SupportMapFragment
                 }
             }
             if (mVehicleOverlay != null) {
-                if (mVehicleOverlay.markerClicked(marker)) {
-                    return true;
-                }
+                return mVehicleOverlay.markerClicked(marker);
             }
             return false;
         }

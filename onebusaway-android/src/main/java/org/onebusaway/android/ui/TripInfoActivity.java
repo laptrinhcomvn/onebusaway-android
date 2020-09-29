@@ -15,13 +15,6 @@
  */
 package org.onebusaway.android.ui;
 
-import org.onebusaway.android.R;
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.provider.ObaContract;
-import org.onebusaway.android.tripservice.TripService;
-import org.onebusaway.android.util.FragmentUtils;
-import org.onebusaway.android.util.UIUtils;
-
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.ContentResolver;
@@ -33,13 +26,6 @@ import android.content.res.Resources;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.CursorLoader;
-import android.support.v4.content.Loader;
-import android.support.v7.app.AppCompatActivity;
 import android.text.format.DateUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -54,7 +40,22 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.onebusaway.android.R;
+import org.onebusaway.android.provider.ObaContract;
+import org.onebusaway.android.tripservice.TripService;
+import org.onebusaway.android.util.FragmentUtils;
+import org.onebusaway.android.util.PreferenceUtils;
+import org.onebusaway.android.util.UIUtils;
+
 import java.util.List;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.CursorLoader;
+import androidx.loader.content.Loader;
 
 public class TripInfoActivity extends AppCompatActivity {
 
@@ -230,12 +231,6 @@ public class TripInfoActivity extends AppCompatActivity {
         public void onLoaderReset(Loader<Cursor> loader) {
         }
 
-        @Override
-        public void onStart() {
-            ObaAnalytics.reportActivityStart(getActivity());
-            super.onStart();
-        }
-
         private boolean initFromBundle(Bundle bundle) {
             final Uri data = bundle.getParcelable(FragmentUtils.URI);
             if (data == null) {
@@ -276,7 +271,7 @@ public class TripInfoActivity extends AppCompatActivity {
         private boolean initFromCursor(Cursor cursor) {
             if (cursor == null || cursor.getCount() < 1) {
                 // Reminder defaults to 10 in the UI
-                mReminderTime = 10;
+                mReminderTime = PreferenceUtils.getInt(getString(R.string.preference_key_default_reminder_time), 10);
                 return false;
             }
             cursor.moveToFirst();
@@ -451,7 +446,9 @@ public class TripInfoActivity extends AppCompatActivity {
             if (c != null) {
                 c.close();
             }
-            TripService.scheduleAll(getActivity());
+            TripService.scheduleAll(getActivity(), true);
+
+            PreferenceUtils.saveInt(getString(R.string.preference_key_default_reminder_time), reminder);
 
             Toast.makeText(getActivity(), R.string.trip_info_saved, Toast.LENGTH_SHORT)
                     .show();
@@ -535,7 +532,7 @@ public class TripInfoActivity extends AppCompatActivity {
                                     public void onClick(DialogInterface dialog, int which) {
                                         ContentResolver cr = getActivity().getContentResolver();
                                         cr.delete(tripUri, null, null);
-                                        TripService.scheduleAll(getActivity());
+                                        TripService.scheduleAll(getActivity(), true);
                                         getActivity().finish();
                                     }
                                 }

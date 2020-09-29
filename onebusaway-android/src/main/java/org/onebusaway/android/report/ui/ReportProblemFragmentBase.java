@@ -15,24 +15,9 @@
  */
 package org.onebusaway.android.report.ui;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GoogleApiAvailability;
-import com.google.android.gms.common.api.GoogleApiClient;
-
-import org.onebusaway.android.R;
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.io.ObaApi;
-import org.onebusaway.android.io.request.ObaResponse;
-import org.onebusaway.android.util.LocationUtils;
-import org.onebusaway.android.util.UIUtils;
-
 import android.app.Activity;
 import android.content.Context;
 import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.AsyncTaskLoader;
-import android.support.v4.content.Loader;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -42,7 +27,23 @@ import android.view.ViewGroup;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.firebase.analytics.FirebaseAnalytics;
+
+import org.onebusaway.android.R;
+import org.onebusaway.android.io.ObaApi;
+import org.onebusaway.android.io.request.ObaResponse;
+import org.onebusaway.android.util.LocationUtils;
+import org.onebusaway.android.util.UIUtils;
+
 import java.util.concurrent.Callable;
+
+import androidx.fragment.app.Fragment;
+import androidx.loader.app.LoaderManager;
+import androidx.loader.content.AsyncTaskLoader;
+import androidx.loader.content.Loader;
 
 public abstract class ReportProblemFragmentBase extends Fragment
         implements LoaderManager.LoaderCallbacks<ObaResponse> {
@@ -66,6 +67,8 @@ public abstract class ReportProblemFragmentBase extends Fragment
      * Stores the problem category codes
      */
     String[] SPINNER_TO_CODE;
+
+    protected FirebaseAnalytics mFirebaseAnalytics;
 
     @Override
     public void onAttach(Activity activity) {
@@ -101,6 +104,8 @@ public abstract class ReportProblemFragmentBase extends Fragment
             // reason to create our view.
             return null;
         }
+
+        mFirebaseAnalytics = FirebaseAnalytics.getInstance(getActivity());
 
         return inflater.inflate(getLayoutId(), null);
     }
@@ -151,9 +156,6 @@ public abstract class ReportProblemFragmentBase extends Fragment
     protected void sendReport() {
         UIUtils.showProgress(this, true);
         getLoaderManager().restartLoader(REPORT_LOADER, getArguments(), this);
-
-        ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.SUBMIT.toString(),
-                getString(R.string.analytics_action_problem), getString(R.string.analytics_label_report_problem));
    }
 
     @Override

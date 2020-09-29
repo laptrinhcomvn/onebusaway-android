@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (C) 2011-2017 Paul Watts (paulcwatts@gmail.com),
+<!-- Copyright (C) 2011-2018 Paul Watts (paulcwatts@gmail.com),
      University of South Florida (sjbarbeau@gmail.com), 
      Microsoft Corporation.
 
@@ -24,24 +24,24 @@
             android:label="@string/trip_service_perm_label"
             android:description="@string/trip_service_perm_description"
             android:protectionLevel="normal"/>
-    <permission
-            android:name="${applicationId}.permission.C2D_MESSAGE"
-            android:protectionLevel="signature"/>
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT"/>
     <uses-permission android:name="${applicationId}.permission.TRIP_SERVICE"/>
-    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE"/>
-    <uses-permission android:name="${applicationId}.permission.C2D_MESSAGE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION"/>
+    <!--To enable checkBatteryOptimizations feature, also uncomment checkBatteryOptimizations() in
+    the HomeActivity's onCreate() method-->
+    <!--<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>-->
 
     <uses-sdk tools:overrideLibrary="net.openid.appauth,
         android.support.customtabs,
@@ -49,21 +49,22 @@
         com.microsoft.embeddedsocial.sdk"/>
 
     <application
-            tools:replace="android:allowBackup"
-            android:allowBackup="false"
-            android:name="org.onebusaway.android.app.Application"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.OneBusAway">
+        tools:replace="android:allowBackup"
+        android:allowBackup="false"
+        android:name="org.onebusaway.android.app.Application"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.OneBusAway"
+        android:networkSecurityConfig="@xml/network_security_config">
         <meta-data
-                android:name="android.app.default_searchable"
-                android:value="org.onebusaway.android.ui.SearchActivity"/>
+            android:name="android.app.default_searchable"
+            android:value="org.onebusaway.android.ui.SearchActivity" />
 
         <activity
-                android:name="org.onebusaway.android.ui.SearchActivity"
-                android:launchMode="singleTop">
+            android:name="org.onebusaway.android.ui.SearchActivity"
+            android:launchMode="singleTop">
             <intent-filter>
-                <action android:name="android.intent.action.SEARCH"/>
+                <action android:name="android.intent.action.SEARCH" />
             </intent-filter>
             <meta-data
                     android:name="android.app.searchable"
@@ -218,6 +219,15 @@
                     android:name="android.support.PARENT_ACTIVITY"
                     android:value="org.onebusaway.android.ui.HomeActivity"/>
         </activity>
+        <activity
+            android:name="org.onebusaway.android.ui.FeedbackActivity"
+            android:label="@string/feedback_notify_title"
+            android:noHistory="true"
+            android:parentActivityName="org.onebusaway.android.ui.HomeActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="org.onebusaway.android.ui.HomeActivity"/>
+        </activity>
 
 
         <!-- Provider is defined in build.gradle flavors -->
@@ -238,6 +248,10 @@
                 android:name=".directions.realtime.RealtimeService">
         </service>
 
+        <service
+            android:name=".nav.NavigationService" >
+        </service>
+
         <receiver android:name=".tripservice.AlarmReceiver">
             <intent-filter>
                 <!-- Should match constants for actions defined in TripService -->
@@ -248,6 +262,8 @@
         <receiver android:name=".tripservice.BootstrapService">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
             </intent-filter>
         </receiver>
@@ -258,6 +274,18 @@
                 <action android:name="com.joulespersecond.seattlebusbot.action.SCHEDULE"/>
                 <action android:name="com.joulespersecond.seattlebusbot.action.POLL"/>
             </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".nav.NavigationReceiver"
+            android:enabled="true"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name=".nav.NavigationReceiver" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".nav.FeedbackReceiver"
+            android:enabled="true">
         </receiver>
         <!-- Receiver for restricted profiles -->
         <receiver android:name=".util.GetRestrictionsReceiver">
@@ -272,6 +300,16 @@
                 <action android:name="${applicationId}.directions.action.START_CHECKS"/>
                 <action android:name="${applicationId}.directions.action.CHECK"/>
             </intent-filter>
+        </receiver>
+
+        <receiver
+                android:enabled="true" android:name=".travelbehavior.receiver.TransitionBroadcastReceiver">
+        </receiver>
+        <receiver
+                android:enabled="true" android:name=".travelbehavior.receiver.RecognitionBroadcastReceiver">
+        </receiver>
+        <receiver
+                android:enabled="true" android:name=".travelbehavior.receiver.LocationBroadcastReceiver">
         </receiver>
 
         <meta-data
@@ -294,6 +332,9 @@
 
         <!-- Opt-out of June 2018 Android Maps styling with pin POI icons - see #891 -->
         <meta-data android:name="com.google.android.gms.maps.API_OPTIONS" android:value="B3H9HE845CFHYG"/>
+        <!-- Below is required to enable Firebase Analytics and override the opposite setting in Embedded Social library -->
+        <meta-data android:name="firebase_analytics_collection_deactivated" android:value="false"
+                   tools:replace="android:value"/>
     </application>
 
     <uses-feature

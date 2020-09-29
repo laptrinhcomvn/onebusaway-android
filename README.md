@@ -1,10 +1,14 @@
 # OneBusAway for Android [![Build Status](https://travis-ci.org/OneBusAway/onebusaway-android.svg?branch=master)](https://travis-ci.org/OneBusAway/onebusaway-android) [![Join the OneBusAway chat](https://onebusaway.herokuapp.com/badge.svg)](https://onebusaway.herokuapp.com/)
 
-This is the official Android / Fire Phone app for [OneBusAway](https://onebusaway.org/)!
+This is the official Android / Fire Phone app for [OneBusAway](https://onebusaway.org/), a project of the non-profit [Open Transit Software Foundation](https://opentransitsoftwarefoundation.org/)!
 
-[![Google Play logo](http://www.android.com/images/brand/android_app_on_play_logo_large.png)](https://play.google.com/store/apps/details?id=com.joulespersecond.seattlebusbot)
+[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png"
+      alt="Get it on Google Play"
+      height="80">](https://play.google.com/store/apps/details?id=com.joulespersecond.seattlebusbot)
 
-[![Amazon App Store logo](https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/devportal2/res/images/amazon-underground-app-us-black.png)](http://www.amazon.com/gp/mas/dl/android?p=com.joulespersecond.seattlebusbot)
+[<img src="https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/devportal2/res/images/amazon-underground-app-us-black.png"
+      alt="Amazon App Store"
+      height="60">](http://www.amazon.com/gp/mas/dl/android?p=com.joulespersecond.seattlebusbot)
 
 <image src="https://user-images.githubusercontent.com/928045/29891146-14ee4f44-8d98-11e7-999b-63f5d2ece916.gif" width="240" height="427" align=right />
 
@@ -58,4 +62,4 @@ Things not going well building the project?  See our [Troubleshooting](TROUBLESH
 
 ## OneBusAway Project
 
-Want to learn more about the [OneBusAway project](https://onebusaway.org/)? [Read up on the entire Application Suite](https://github.com/OneBusAway/onebusaway-application-modules) and/or [learn more about the mobile apps](https://github.com/OneBusAway/onebusaway-application-modules/wiki/Mobile-App-Design-Considerations).
+Want to learn more about the [OneBusAway project](https://onebusaway.org/), a project of the non-profit [Open Transit Software Foundation](https://opentransitsoftwarefoundation.org/)? [Read up on the entire Application Suite](https://github.com/OneBusAway/onebusaway-application-modules) and/or [learn more about the mobile apps](https://github.com/OneBusAway/onebusaway-application-modules/wiki/Mobile-App-Design-Considerations).

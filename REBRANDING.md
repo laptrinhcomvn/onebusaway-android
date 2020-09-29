@@ -66,7 +66,6 @@ Typical resource values that you would override in a new brand include:
  * `apiv2_key` in `src/newBrandName/res/values/do_not_translate.xml` - your Android Maps API v2 key (see [this page](https://developers.google.com/maps/documentation/android/start#get-key) to get your key)
  * app theme colors (`theme_primary`, `theme_primary_dark`, `theme_muted`, `theme_accent`) in `src/newBrandName/res/values/colors.xml` - the default colors for the Action Bar, etc.  For example, the Agency X brand specifies red theme colors, while Agency Y brand specifies blue theme colors.
  * `stop_info_ontime` in `src/newBrandName/res/values/colors.xml` - the OneBusAway brand uses its green theme color for the "on-time" arrival color.  If your theme color isn't green, you need to specify green for this "on-time" arrival color - we suggest `#4CAF50`
- * `ga_trackingId` in `src/newBrandName/res/values/app_tracker.xml` and `src/newBrandName/res/values/global_tracker.xml` - your Google Analytics tracker IDs.  We allow for two trackers to offer both unrolled (free) and rolled-up reporting (for paid accounts) - see [this discussion](https://github.com/OneBusAway/onebusaway-android/issues/105#issuecomment-71862899) for details.
 
 If you want to implement custom code, we recommend that you create a base abstract class, and split the implementation differences into subclasses that can be selected at runtime by different brands based on configuration options in `build.gradle`.  See `org.onebusaway.android.ui.ArrivalsListAdapterBase` for a sample base class, and `ArrivalsListAdapterStyleA` and `ArrivalsListAdapterStyleB` for examples of how different presentations of arrival times can be used in different brands, and see the following section for how these options are specified in `build.gradle`.
 
@@ -77,8 +76,9 @@ We provide a few configuration options in `build.gradle` brand flavor definition
 **Arrival Information**
 
 Valid values are `0` and `1` - The default way that estimated arrival information is shown to the user.  There are two options, as defined in `BuildFlavorConstants`:
-    * `ARRIVAL_INFO_STYLE_A = 0` - The original OneBusAway presentation of arrival info to the user, with small rows sorted by estimated arrival time
-    * `ARRIVAL_INFO_STYLE_B = 1` - The presentation of arrival info created by York Region Transit/VIVA for their forked version of OBA, which groups arrival times by route, and shows scheduled arrival times - see [their apps here](http://www.yorkregiontransit.com/en/ridingwithus/apps.asp)
+
+* `ARRIVAL_INFO_STYLE_A = 0` - The original OneBusAway presentation of arrival info to the user, with small rows sorted by estimated arrival time
+* `ARRIVAL_INFO_STYLE_B = 1` - The presentation of arrival info created by York Region Transit/VIVA for their forked version of OBA, which groups arrival times by route, and shows scheduled arrival times - see [their apps here](http://www.yorkregiontransit.com/en/ridingwithus/apps.asp)
 
 No matter which default is defined, users can change the sorting style by using the "Sort by" button in the action bar.
 
@@ -87,6 +87,25 @@ No matter which default is defined, users can change the sorting style by using 
 **Fixed vs. Multi-region**
 
 `USE_FIXED_REGION` - Valid values are `true` and `false` - If true, then the app will be fixed to the region information provided for this brand dimension in the `build.gradle`.  If false, then the app will function with the normal multi-region process, and work across various regions defined in the Regions API.  This value is false for the original OneBusAway brand so it supports multi-region.
+
+**Google Places SDK vs. Pelias geocoder for trip planning**
+
+`USE_PELIAS_GEOCODING` defines which software is used for searching for origins and destinations while trip planning (e.g., returning a latitude and longitude for a search for `airport`). Note that this doesn't affect the trip planner itself - OpenTripPlanner is always used to plan an itinerary from one latitude and longitude to another.
+
+Valid values are `true` and `false`:
+
+* `USE_PELIAS_GEOCODING = true` - The [Pelias geocoder](https://github.com/pelias/pelias) (configured for [geocode.earth](https://geocode.earth/) by default) will be used to search for origins and destinations when planning a trip. You must also set the Pelias API key in `gradle.properties` (see below).
+* `USE_PELIAS_GEOCODING = false` - The [Google Places SDK for Android](https://developers.google.com/places/android-sdk/intro) will be used to search for origins and destinations when planning a trip. Note that you'll need to set up your own billing account with the [Google Maps Platform](https://developers.google.com/maps/gmp-get-started) and configure that account for your app release signature.
+
+If `USE_PELIAS_GEOCODING = true`, you'll need to provide an API key (by default for [geocode.earth](https://geocode.earth/)).
+
+Add the following to `onebusaway-android/gradle.properties`:
+
+`Pelias_oba=XXXXXX`
+
+...where `XXXXXX` is your API key. Note that you'll need to change the suffix of `_oba` to match the name of your build flavor.
+
+Note that if you want to use a different Pelias server other than [geocode.earth](https://geocode.earth/) you can change the base Pelias URL being used by overriding the resource string `pelias_api_url` in `donottranslate.xml` (see above for examples of how to override string resources in your build flavor).
 
 ## Examples
 
@@ -131,3 +150,7 @@ The Agency Y sample has chosen different options - they are using `ARRIVAL_INFO_
     }
 
 Note that all brands need to supply the `FIXED_REGION_...` fields in their flavor dimension in `build.gradle` so the project will compile, although these values are only used if `USE_FIXED_REGION` is set to true.
+
+## Acknowledgements
+
+When launching a rebranded version of OneBusAway, acknowledging that your app is based on the hard work of those contributing to the OneBusAway project is certainly appreciated.  However, please do not imply that the OneBusAway project or it's contributors endorse the rebranded app, and please do not use the OneBusAway logo or color scheme in your rebranded app.

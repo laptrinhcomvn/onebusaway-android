@@ -15,21 +15,25 @@
  */
 package org.onebusaway.android.ui;
 
-import org.onebusaway.android.R;
-import org.onebusaway.android.io.elements.ObaArrivalInfo;
-import org.onebusaway.android.provider.ObaContract;
-import org.onebusaway.android.util.ArrivalInfoUtils;
-import org.onebusaway.android.util.UIUtils;
-
 import android.content.ContentValues;
 import android.content.Context;
+import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.support.v4.graphics.drawable.DrawableCompat;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.core.graphics.drawable.DrawableCompat;
+
+import org.onebusaway.android.R;
+import org.onebusaway.android.io.elements.ObaArrivalInfo;
+import org.onebusaway.android.io.elements.OccupancyState;
+import org.onebusaway.android.io.elements.Status;
+import org.onebusaway.android.provider.ObaContract;
+import org.onebusaway.android.util.ArrivalInfoUtils;
+import org.onebusaway.android.util.UIUtils;
 
 import java.util.ArrayList;
 
@@ -72,6 +76,7 @@ public class ArrivalsListAdapterStyleA extends ArrivalsListAdapterBase<ArrivalIn
         TextView etaView = (TextView) view.findViewById(R.id.eta);
         TextView minView = (TextView) view.findViewById(R.id.eta_min);
         ViewGroup realtimeView = (ViewGroup) view.findViewById(R.id.eta_realtime_indicator);
+        ViewGroup occupancyView = view.findViewById(R.id.occupancy);
         ImageView moreView = (ImageView) view.findViewById(R.id.more_horizontal);
         moreView.setColorFilter(
                 context.getResources().getColor(R.color.switch_thumb_normal_material_dark));
@@ -81,9 +86,19 @@ public class ArrivalsListAdapterStyleA extends ArrivalsListAdapterBase<ArrivalIn
                 R.drawable.focus_star_on :
                 R.drawable.focus_star_off);
 
+        // CANCELED trips
+        if (Status.CANCELED.equals(stopInfo.getStatus())) {
+            // Strike through the text fields
+            route.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+            destination.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+            time.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+            etaView.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+            minView.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+        }
+
         String shortName = arrivalInfo.getShortName();
-        route.setText(shortName);
-        UIUtils.maybeShrinkRouteName(getContext(), route, shortName);
+        route.setText(shortName.trim());
+        UIUtils.maybeShrinkRouteName(getContext(), route, shortName.trim());
 
         destination.setText(UIUtils.formatDisplayText(arrivalInfo.getHeadsign()));
         status.setText(stopInfo.getStatusText());
@@ -121,6 +136,17 @@ public class ArrivalsListAdapterStyleA extends ArrivalsListAdapterBase<ArrivalIn
         status.setPadding(pSides, pTopBottom, pSides, pTopBottom);
 
         time.setText(stopInfo.getTimeText());
+
+        // Occupancy
+        if (stopInfo.getPredictedOccupancy() != null) {
+            // Predicted occupancy data
+            UIUtils.setOccupancyVisibilityAndColor(occupancyView, stopInfo.getPredictedOccupancy(), OccupancyState.PREDICTED);
+            UIUtils.setOccupancyContentDescription(occupancyView, stopInfo.getPredictedOccupancy(), OccupancyState.PREDICTED);
+        } else {
+            // Historical occupancy data
+            UIUtils.setOccupancyVisibilityAndColor(occupancyView, stopInfo.getHistoricalOccupancy(), OccupancyState.HISTORICAL);
+            UIUtils.setOccupancyContentDescription(occupancyView, stopInfo.getHistoricalOccupancy(), OccupancyState.HISTORICAL);
+        }
 
         ContentValues values = null;
         if (mTripsForStop != null) {

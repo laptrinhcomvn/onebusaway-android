@@ -17,28 +17,18 @@
  */
 package org.onebusaway.android.ui;
 
-import org.onebusaway.android.R;
-import org.onebusaway.android.app.Application;
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.io.elements.ObaArrivalInfo;
-import org.onebusaway.android.io.elements.ObaRegion;
-import org.onebusaway.android.provider.ObaContract;
-import org.onebusaway.android.util.ArrivalInfoUtils;
-import org.onebusaway.android.util.EmbeddedSocialUtils;
-import org.onebusaway.android.util.UIUtils;
-
 import android.annotation.TargetApi;
 import android.content.ContentQueryMap;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.graphics.Paint;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
-import android.support.v4.app.FragmentManager;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.text.style.ClickableSpan;
@@ -59,6 +49,21 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TableLayout;
 import android.widget.TextView;
+
+import androidx.fragment.app.FragmentManager;
+
+import com.google.firebase.analytics.FirebaseAnalytics;
+
+import org.onebusaway.android.R;
+import org.onebusaway.android.app.Application;
+import org.onebusaway.android.io.ObaAnalytics;
+import org.onebusaway.android.io.elements.ObaArrivalInfo;
+import org.onebusaway.android.io.elements.ObaRegion;
+import org.onebusaway.android.io.elements.Status;
+import org.onebusaway.android.provider.ObaContract;
+import org.onebusaway.android.util.ArrivalInfoUtils;
+import org.onebusaway.android.util.EmbeddedSocialUtils;
+import org.onebusaway.android.util.UIUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -293,11 +298,14 @@ class ArrivalsListHeader {
     // Controller to change parent sliding panel
     HomeActivity.SlidingPanelController mSlidingPanelController;
 
+    private FirebaseAnalytics mFirebaseAnalytics;
+
     ArrivalsListHeader(Context context, Controller controller, FragmentManager fm) {
         mController = controller;
         mContext = context;
         mResources = context.getResources();
         mFragmentManager = fm;
+        mFirebaseAnalytics = FirebaseAnalytics.getInstance(context);
 
         // Retrieve and cache the system's default "short" animation time.
         mShortAnimationDuration = mResources.getInteger(
@@ -429,10 +437,11 @@ class ArrivalsListHeader {
                     i.setData(stopInfoBuilder.build());
                     mContext.startActivity(i);
                     //Analytics
-                    if (obaRegion != null && obaRegion.getName() != null)
-                        ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                                mContext.getString(R.string.analytics_action_button_press),
-                                mContext.getString(R.string.analytics_label_button_press_stopinfo) + obaRegion.getName());
+                    if (obaRegion.getName() != null) {
+                        ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                                mContext.getString(R.string.analytics_label_button_press_stopinfo),
+                                null);
+                    }
                 }
             });
         }
@@ -448,9 +457,9 @@ class ArrivalsListHeader {
         mStopDiscussion.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                        mContext.getString(R.string.analytics_action_button_press),
-                        mContext.getString(R.string.analytics_label_button_press_social_stop));
+                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                        mContext.getString(R.string.analytics_label_button_press_social_stop),
+                        null);
                 mController.openStopDiscussion();
             }
         });
@@ -714,6 +723,14 @@ class ArrivalsListHeader {
                         R.drawable.focus_star_on :
                         R.drawable.focus_star_off);
 
+                if (info1.getTripStatus() != null && Status.CANCELED.equals(info1.getTripStatus().getStatus())) {
+                    // Trip is canceled - strike through text fields
+                    mEtaRouteName1.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                    mEtaRouteDirection1.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                    mEtaArrivalInfo1.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                    mEtaMin1.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                }
+
                 mEtaRouteName1.setText(info1.getShortName());
                 mEtaRouteDirection1.setText(UIUtils.formatDisplayText(info1.getHeadsign()));
                 long eta = mArrivalInfo.get(i1).getEta();
@@ -777,6 +794,15 @@ class ArrivalsListHeader {
                     mEtaRouteFavorite2.setImageResource(isFavorite2 ?
                             R.drawable.focus_star_on :
                             R.drawable.focus_star_off);
+
+                    if (info2.getTripStatus() != null && Status.CANCELED.equals(info2.getTripStatus().getStatus())) {
+                        // Trip is canceled - strike through text fields
+                        mEtaRouteName2.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                        mEtaRouteDirection2.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                        mEtaArrivalInfo2.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                        mEtaMin2.setPaintFlags(Paint.STRIKE_THRU_TEXT_FLAG);
+                    }
+
                     mEtaRouteName2.setText(info2.getShortName());
                     mEtaRouteDirection2.setText(UIUtils.formatDisplayText(info2.getHeadsign()));
                     eta = mArrivalInfo.get(i2).getEta();

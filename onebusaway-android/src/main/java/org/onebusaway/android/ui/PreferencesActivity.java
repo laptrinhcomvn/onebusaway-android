@@ -17,34 +17,22 @@
  */
 package org.onebusaway.android.ui;
 
-import com.google.android.gms.analytics.GoogleAnalytics;
-
-import com.microsoft.embeddedsocial.sdk.EmbeddedSocial;
-
-import org.onebusaway.android.BuildConfig;
-import org.onebusaway.android.R;
-import org.onebusaway.android.app.Application;
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.io.elements.ObaRegion;
-import org.onebusaway.android.region.ObaRegionsTask;
-import org.onebusaway.android.util.BuildFlavorUtils;
-import org.onebusaway.android.util.EmbeddedSocialUtils;
-import org.onebusaway.android.util.ShowcaseViewUtils;
-
+import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.Preference.OnPreferenceChangeListener;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceCategory;
 import android.preference.PreferenceScreen;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Patterns;
@@ -57,10 +45,35 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import com.google.firebase.analytics.FirebaseAnalytics;
+import com.microsoft.embeddedsocial.sdk.EmbeddedSocial;
+
+import org.onebusaway.android.BuildConfig;
+import org.onebusaway.android.R;
+import org.onebusaway.android.app.Application;
+import org.onebusaway.android.io.ObaAnalytics;
+import org.onebusaway.android.io.elements.ObaRegion;
+import org.onebusaway.android.region.ObaRegionsTask;
+import org.onebusaway.android.travelbehavior.TravelBehaviorManager;
+import org.onebusaway.android.travelbehavior.utils.TravelBehaviorUtils;
+import org.onebusaway.android.util.BackupUtils;
+import org.onebusaway.android.util.BuildFlavorUtils;
+import org.onebusaway.android.util.EmbeddedSocialUtils;
+import org.onebusaway.android.util.PermissionUtils;
+import org.onebusaway.android.util.ShowcaseViewUtils;
+
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+
+import static org.onebusaway.android.util.PermissionUtils.RESTORE_BACKUP_PERMISSION_REQUEST;
+import static org.onebusaway.android.util.PermissionUtils.SAVE_BACKUP_PERMISSION_REQUEST;
+import static org.onebusaway.android.util.PermissionUtils.STORAGE_PERMISSIONS;
 
 public class PreferencesActivity extends PreferenceActivity
         implements Preference.OnPreferenceClickListener, OnPreferenceChangeListener,
@@ -80,6 +93,8 @@ public class PreferencesActivity extends PreferenceActivity
 
     Preference mAnalyticsPref;
 
+    CheckBoxPreference mTravelBehaviorPref;
+
     Preference mTutorialPref;
 
     Preference mDonatePref;
@@ -88,12 +103,18 @@ public class PreferencesActivity extends PreferenceActivity
 
     Preference mAboutPref;
 
+    Preference mSaveBackup;
+
+    Preference mRestoreBackup;
+
     boolean mAutoSelectInitialValue;
 
     boolean mOtpCustomAPIUrlChanged = false;
     //Save initial value so we can compare to current value in onDestroy()
 
     ListPreference preferredUnits;
+
+    private FirebaseAnalytics mFirebaseAnalytics;
 
     @SuppressWarnings("deprecation")
     public void onCreate(Bundle savedInstanceState) {
@@ -103,11 +124,19 @@ public class PreferencesActivity extends PreferenceActivity
 
         addPreferencesFromResource(R.xml.preferences);
 
+        mFirebaseAnalytics = FirebaseAnalytics.getInstance(this);
+
         mPreference = findPreference(getString(R.string.preference_key_region));
         mPreference.setOnPreferenceClickListener(this);
 
         mLeftHandMode = findPreference(getString(R.string.preference_key_left_hand_mode));
         mLeftHandMode.setOnPreferenceChangeListener(this);
+
+        mSaveBackup = findPreference(getString(R.string.preference_key_save_backup));
+        mSaveBackup.setOnPreferenceClickListener(this);
+
+        mRestoreBackup = findPreference(getString(R.string.preference_key_restore_backup));
+        mRestoreBackup.setOnPreferenceClickListener(this);
 
         mCustomApiUrlPref = findPreference(getString(R.string.preference_key_oba_api_url));
         mCustomApiUrlPref.setOnPreferenceChangeListener(this);
@@ -117,6 +146,19 @@ public class PreferencesActivity extends PreferenceActivity
 
         mAnalyticsPref = findPreference(getString(R.string.preferences_key_analytics));
         mAnalyticsPref.setOnPreferenceChangeListener(this);
+
+        mTravelBehaviorPref = (CheckBoxPreference) findPreference(getString(R.string.preferences_key_travel_behavior));
+        mTravelBehaviorPref.setOnPreferenceChangeListener(this);
+
+        if (!TravelBehaviorUtils.isTravelBehaviorActiveInRegion() ||
+                (!TravelBehaviorUtils.allowEnrollMoreParticipantsInStudy() &&
+                        !TravelBehaviorUtils.isUserParticipatingInStudy())) {
+            PreferenceCategory aboutCategory = (PreferenceCategory)
+                    findPreference(getString(R.string.preferences_category_about));
+            aboutCategory.removePreference(mTravelBehaviorPref);
+        } else {
+            mTravelBehaviorPref.setChecked(TravelBehaviorUtils.isUserParticipatingInStudy());
+        }
 
         mTutorialPref = findPreference(getString(R.string.preference_key_tutorial));
         mTutorialPref.setOnPreferenceClickListener(this);
@@ -137,17 +179,13 @@ public class PreferencesActivity extends PreferenceActivity
                 socialPref.setSummary(R.string.preferences_screen_social_summary_signed_in);
             }
 
-            socialPref.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-                @Override
-                public boolean onPreferenceClick(Preference preference) {
-                    ObaAnalytics.reportEventWithCategory(
-                            ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                            getString(R.string.analytics_action_button_press),
-                            getString(R.string.analytics_label_button_press_social_settings));
+            socialPref.setOnPreferenceClickListener(preference -> {
+                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                        getString(R.string.analytics_label_button_press_social_settings),
+                        null);
 
-                    EmbeddedSocial.launchOptionsActivity(PreferencesActivity.this);
-                    return true;
-                }
+                EmbeddedSocial.launchOptionsActivity(PreferencesActivity.this);
+                return true;
             });
         } else {
             // Social is not enabled so don't show related preferences
@@ -175,6 +213,16 @@ public class PreferencesActivity extends PreferenceActivity
             Preference experimentalRegion = findPreference(
                     getString(R.string.preference_key_experimental_regions));
             advancedCategory.removePreference(experimentalRegion);
+        }
+
+        // If the Android version is Oreo (8.0) hide "Notification" preference
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getPreferenceScreen().removePreference(findPreference(getString(R.string.preference_key_notifications)));
+        }
+
+        // If the Android version is lower than Nougat (7.0) and equal to or above Pie (9.0) hide "Share trip logs" preference
+        if ((Build.VERSION.SDK_INT < Build.VERSION_CODES.N) || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)) {
+            getPreferenceScreen().removePreference(findPreference(getString(R.string.preferences_key_user_debugging_logs_category)));
         }
 
         // If its the OBA brand flavor, then show the "Donate" preference and hide "Powered by OBA"
@@ -213,12 +261,6 @@ public class PreferencesActivity extends PreferenceActivity
                 notifications.removePreference(tripPlan);
             }
         }
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        ObaAnalytics.reportActivityStart(this);
     }
 
     @Override
@@ -288,31 +330,92 @@ public class PreferencesActivity extends PreferenceActivity
         if (pref.equals(mPreference)) {
             RegionsActivity.start(this);
         } else if (pref.equals(mTutorialPref)) {
-            ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                    getString(R.string.analytics_action_button_press),
-                    getString(R.string.analytics_label_button_press_tutorial));
+            ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                    getString(R.string.analytics_label_button_press_tutorial),
+                    null);
             ShowcaseViewUtils.resetAllTutorials(this);
             NavHelp.goHome(this, true);
         } else if (pref.equals(mDonatePref)) {
-            ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                    getString(R.string.analytics_action_button_press),
-                    getString(R.string.analytics_label_button_press_donate));
+            ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                    getString(R.string.analytics_label_button_press_donate),
+                    null);
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.donate_url)));
             startActivity(intent);
         } else if (pref.equals(mPoweredByObaPref)) {
-            ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                    getString(R.string.analytics_action_button_press),
-                    getString(R.string.analytics_label_button_press_powered_by_oba));
+            ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                    getString(R.string.analytics_label_button_press_powered_by_oba),
+                    null);
             Intent intent = new Intent(Intent.ACTION_VIEW,
                     Uri.parse(getString(R.string.powered_by_oba_url)));
             startActivity(intent);
         } else if (pref.equals(mAboutPref)) {
-            ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                    getString(R.string.analytics_action_button_press),
-                    getString(R.string.analytics_label_button_press_about));
+            ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                    getString(R.string.analytics_label_button_press_about),
+                    null);
             AboutActivity.start(this);
+        } else if (pref.equals(mSaveBackup)) {
+            // SavePreference will get the click event but will ignore it if permissions haven't
+            // been granted yet so we can handle permissions here
+            maybeRequestPermissions(SAVE_BACKUP_PERMISSION_REQUEST);
+        } else if (pref.equals(mRestoreBackup)){
+            // RestorePreference will get the click event but will ignore it if permissions haven't
+            // been granted yet so we can handle permissions here.
+            maybeRequestPermissions(RESTORE_BACKUP_PERMISSION_REQUEST);
         }
         return true;
+    }
+
+    private void maybeRequestPermissions(int permissionRequest) {
+        if (!PermissionUtils.hasGrantedPermissions(this, STORAGE_PERMISSIONS)) {
+            // Request permissions from the user
+            ActivityCompat.requestPermissions(this, STORAGE_PERMISSIONS, permissionRequest);
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode, String[] permissions, int[] grantResults) {
+        int result = PackageManager.PERMISSION_DENIED;
+        if (requestCode == SAVE_BACKUP_PERMISSION_REQUEST || requestCode == RESTORE_BACKUP_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                result = PackageManager.PERMISSION_GRANTED;
+                // The first time the user grants permission, we have to explictly call the save
+                // or restore utility method so that the save or restore is triggered after the permission is granted
+                if (requestCode == SAVE_BACKUP_PERMISSION_REQUEST) {
+                    BackupUtils.save(this);
+                } else {
+                    BackupUtils.restore(this);
+                }
+            } else {
+                showStoragePermissionDialog(this, requestCode);
+            }
+        }
+    }
+
+    /**
+     * Shows the dialog to explain why storage permissions are needed
+     * @param activity Activity used to show the dialog
+     * @param requestCode The requesting permission code (SAVE_BACKUP_PERMISSION_REQUEST or RESTORE_BACKUP_PERMISSION_REQUEST)
+     */
+    private void showStoragePermissionDialog(Activity activity, int requestCode) {
+        androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(R.string.storage_permissions_title)
+                .setMessage(R.string.storage_permissions_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.ok,
+                        (dialog, which) -> {
+                            // Request permissions from the user
+                            ActivityCompat
+                                    .requestPermissions(activity, STORAGE_PERMISSIONS, requestCode);
+                        }
+                )
+                .setNegativeButton(R.string.no_thanks,
+                        (dialog, which) -> {
+                            // No-op
+                        }
+                );
+        builder.create().show();
     }
 
     @Override
@@ -351,22 +454,23 @@ public class PreferencesActivity extends PreferenceActivity
         } else if (preference.equals(mAnalyticsPref) && newValue instanceof Boolean) {
             Boolean isAnalyticsActive = (Boolean) newValue;
             //Report if the analytics turns off, just before shared preference changed
-            if (!isAnalyticsActive) {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.APP_SETTINGS.toString(),
-                        getString(R.string.analytics_action_edit_general),
-                        getString(R.string.analytics_label_analytic_preference)
-                                + (isAnalyticsActive ? "YES" : "NO"));
-                GoogleAnalytics.getInstance(getBaseContext()).dispatchLocalHits();
+            ObaAnalytics.setSendAnonymousData(mFirebaseAnalytics, isAnalyticsActive);
+        } else if (preference.equals(mTravelBehaviorPref) && newValue instanceof Boolean) {
+            Boolean isTravelBehaviorActive = (Boolean) newValue;
+            if(isTravelBehaviorActive) {
+                new TravelBehaviorManager(this, getApplicationContext()).
+                        registerTravelBehaviorParticipant(true);
+            } else {
+                new TravelBehaviorManager(this, getApplicationContext()).
+                        stopCollectingData();
+                TravelBehaviorManager.optOutUser();
+                TravelBehaviorManager.optOutUserOnServer();
             }
+
         } else if (preference.equals(mLeftHandMode) && newValue instanceof Boolean) {
             Boolean isLeftHandEnabled = (Boolean) newValue;
             //Report if left handed mode is turned on, just before shared preference changed
-            if (isLeftHandEnabled) {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.APP_SETTINGS.toString(),
-                        getString(R.string.analytics_action_edit_general),
-                        getString(R.string.analytics_label_left_hand_preference)
-                                + (isLeftHandEnabled ? "YES" : "NO"));
-            }
+            ObaAnalytics.setLeftHanded(mFirebaseAnalytics, isLeftHandEnabled);
         }
         return true;
     }
@@ -415,13 +519,13 @@ public class PreferencesActivity extends PreferenceActivity
             // Wait to change the region preference description until the task callback
             //Analytics
             if (experimentalServers) {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                        getString(R.string.analytics_action_button_press),
-                        getString(R.string.analytics_label_button_press_experimental_on));
+                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                        getString(R.string.analytics_label_button_press_experimental_on),
+                        null);
             } else {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                        getString(R.string.analytics_action_button_press),
-                        getString(R.string.analytics_label_button_press_experimental_off));
+                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                        getString(R.string.analytics_label_button_press_experimental_off),
+                        null);
             }
         } else if (key.equals(getString(R.string.preference_key_oba_api_url))) {
             // Change the region preference description to show we're not using a region
@@ -437,33 +541,26 @@ public class PreferencesActivity extends PreferenceActivity
             boolean autoSelect = settings
                     .getBoolean(getString(R.string.preference_key_auto_select_region), true);
             if (autoSelect) {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                        getString(R.string.analytics_action_button_press),
-                        getString(R.string.analytics_label_button_press_auto));
+                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                        getString(R.string.analytics_label_button_press_auto),
+                        null);
             } else {
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                        getString(R.string.analytics_action_button_press),
-                        getString(R.string.analytics_label_button_press_manual));
+                ObaAnalytics.reportUiEvent(mFirebaseAnalytics,
+                        getString(R.string.analytics_label_button_press_manual),
+                        null);
             }
         } else if (key.equalsIgnoreCase(getString(R.string.preferences_key_analytics))) {
             Boolean isAnalyticsActive = settings.getBoolean(Application.get().
-                    getString(R.string.preferences_key_analytics), Boolean.FALSE);
+                    getString(R.string.preferences_key_analytics), Boolean.TRUE);
             //Report if the analytics turns on, just after shared preference changed
-            if (isAnalyticsActive)
-                ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.APP_SETTINGS.toString(),
-                        getString(R.string.analytics_action_edit_general),
-                        getString(R.string.analytics_label_analytic_preference)
-                                + (isAnalyticsActive ? "YES" : "NO"));
+            ObaAnalytics.setSendAnonymousData(mFirebaseAnalytics, isAnalyticsActive);
         } else if (key.equalsIgnoreCase(getString(R.string.preference_key_arrival_info_style))) {
             // Change the arrival info description
             changePreferenceSummary(key);
         } else if (key.equalsIgnoreCase(getString(R.string.preference_key_show_negative_arrivals))) {
             boolean showDepartedBuses = settings.getBoolean(Application.get().
                     getString(R.string.preference_key_show_negative_arrivals), Boolean.FALSE);
-            ObaAnalytics.reportEventWithCategory(ObaAnalytics.ObaEventCategory.APP_SETTINGS.toString(),
-                    getString(R.string.analytics_action_edit_general),
-                    getString(R.string.analytics_label_show_departed_bus_preference)
-                            + (showDepartedBuses ? "YES" : "NO"));
+            ObaAnalytics.setShowDepartedVehicles(mFirebaseAnalytics, showDepartedBuses);
         }
     }
 
@@ -478,8 +575,8 @@ public class PreferencesActivity extends PreferenceActivity
             // URI.parse() doesn't tell us if the scheme is missing, so use URL() instead (#126)
             URL url = new URL(apiUrl);
         } catch (MalformedURLException e) {
-            // Assume HTTP scheme if none is provided
-            apiUrl = getString(R.string.http_prefix) + apiUrl;
+            // Assume HTTPS scheme if none is provided
+            apiUrl = getString(R.string.https_prefix) + apiUrl;
         }
         return Patterns.WEB_URL.matcher(apiUrl).matches();
     }

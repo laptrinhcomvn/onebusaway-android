@@ -17,31 +17,10 @@
 
 package org.onebusaway.android.util;
 
-import com.google.android.gms.common.GoogleApiAvailability;
-
-import org.onebusaway.android.R;
-import org.onebusaway.android.app.Application;
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.io.ObaApi;
-import org.onebusaway.android.io.elements.ObaArrivalInfo;
-import org.onebusaway.android.io.elements.ObaRegion;
-import org.onebusaway.android.io.elements.ObaRoute;
-import org.onebusaway.android.io.elements.ObaSituation;
-import org.onebusaway.android.io.elements.ObaStop;
-import org.onebusaway.android.io.request.ObaArrivalInfoResponse;
-import org.onebusaway.android.map.MapParams;
-import org.onebusaway.android.provider.ObaContract;
-import org.onebusaway.android.ui.ArrivalsListActivity;
-import org.onebusaway.android.ui.HomeActivity;
-import org.onebusaway.android.ui.RouteInfoActivity;
-import org.onebusaway.android.view.RealtimeIndicatorView;
-import org.onebusaway.util.comparators.AlphanumComparator;
-
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.SearchManager;
 import android.content.ActivityNotFoundException;
 import android.content.ContentQueryMap;
@@ -51,6 +30,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -61,6 +41,7 @@ import android.graphics.Matrix;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.location.Location;
 import android.media.ExifInterface;
@@ -72,20 +53,6 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.Settings;
-import android.support.annotation.DrawableRes;
-import android.support.annotation.NonNull;
-import android.support.v4.app.Fragment;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.pm.ShortcutInfoCompat;
-import android.support.v4.content.pm.ShortcutManagerCompat;
-import android.support.v4.content.res.ResourcesCompat;
-import android.support.v4.graphics.drawable.DrawableCompat;
-import android.support.v4.graphics.drawable.IconCompat;
-import android.support.v4.util.Pair;
-import android.support.v4.view.MenuItemCompat;
-import android.support.v7.app.ActionBar;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.SearchView;
 import android.text.Spannable;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
@@ -100,8 +67,49 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.CheckBox;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SearchView;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.pm.ShortcutInfoCompat;
+import androidx.core.content.pm.ShortcutManagerCompat;
+import androidx.core.content.res.ResourcesCompat;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.core.graphics.drawable.IconCompat;
+import androidx.core.util.Pair;
+import androidx.core.view.MenuItemCompat;
+import androidx.core.widget.ImageViewCompat;
+import androidx.fragment.app.Fragment;
+
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.firebase.analytics.FirebaseAnalytics;
+
+import org.onebusaway.android.R;
+import org.onebusaway.android.app.Application;
+import org.onebusaway.android.io.ObaAnalytics;
+import org.onebusaway.android.io.ObaApi;
+import org.onebusaway.android.io.elements.ObaArrivalInfo;
+import org.onebusaway.android.io.elements.ObaRegion;
+import org.onebusaway.android.io.elements.ObaRoute;
+import org.onebusaway.android.io.elements.ObaSituation;
+import org.onebusaway.android.io.elements.ObaStop;
+import org.onebusaway.android.io.elements.Occupancy;
+import org.onebusaway.android.io.elements.OccupancyState;
+import org.onebusaway.android.io.request.ObaArrivalInfoResponse;
+import org.onebusaway.android.map.MapParams;
+import org.onebusaway.android.provider.ObaContract;
+import org.onebusaway.android.ui.ArrivalsListActivity;
+import org.onebusaway.android.ui.HomeActivity;
+import org.onebusaway.android.ui.RouteInfoActivity;
+import org.onebusaway.android.view.RealtimeIndicatorView;
+import org.onebusaway.util.comparators.AlphanumComparator;
 
 import java.io.File;
 import java.io.IOException;
@@ -114,6 +122,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import static org.onebusaway.android.util.PermissionUtils.LOCATION_PERMISSIONS;
+import static org.onebusaway.android.util.PermissionUtils.LOCATION_PERMISSION_REQUEST;
 
 /**
  * A class containing utility methods related to the user interface
@@ -137,23 +148,21 @@ public final class UIUtils {
      * Sets up the search view in the action bar
      */
     public static void setupSearch(Activity activity, Menu menu) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-            SearchManager searchManager =
-                    (SearchManager) activity.getSystemService(Context.SEARCH_SERVICE);
-            final MenuItem searchMenu = menu.findItem(R.id.action_search);
-            SearchView searchView = (SearchView) MenuItemCompat.getActionView(searchMenu);
-            searchView.setSearchableInfo(
-                    searchManager.getSearchableInfo(activity.getComponentName()));
-            // Close the keyboard and SearchView at same time when the back button is pressed
-            searchView.setOnQueryTextFocusChangeListener(new View.OnFocusChangeListener() {
-                @Override
-                public void onFocusChange(View view, boolean queryTextFocused) {
-                    if (!queryTextFocused) {
-                        MenuItemCompat.collapseActionView(searchMenu);
-                    }
+        SearchManager searchManager =
+                (SearchManager) activity.getSystemService(Context.SEARCH_SERVICE);
+        final MenuItem searchMenu = menu.findItem(R.id.action_search);
+        SearchView searchView = (SearchView) MenuItemCompat.getActionView(searchMenu);
+        searchView.setSearchableInfo(
+                searchManager.getSearchableInfo(activity.getComponentName()));
+        // Close the keyboard and SearchView at same time when the back button is pressed
+        searchView.setOnQueryTextFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View view, boolean queryTextFocused) {
+                if (!queryTextFocused) {
+                    MenuItemCompat.collapseActionView(searchMenu);
                 }
-            });
-        }
+            }
+        });
     }
 
     public static void showProgress(Fragment fragment, boolean visible) {
@@ -1235,11 +1244,13 @@ public final class UIUtils {
      * @param isReminderVisible true if the reminder is currently visible for a trip, false if it
      *                          is
      *                          not
+     * @param occupancy occupancy of this trip
+     * @param occupancyState occupanceState of this trip
      * @return the list of Strings that should be shown for a given trip, provided the arguments for
      * that trip
      */
     public static List<String> buildTripOptions(Context c, boolean isRouteFavorite, boolean hasUrl,
-            boolean isReminderVisible) {
+                                                boolean isReminderVisible, boolean hasRouteFilter, Occupancy occupancy, OccupancyState occupancyState) {
         ArrayList<String> list = new ArrayList<>();
         if (!isRouteFavorite) {
             list.add(c.getString(R.string.bus_options_menu_add_star));
@@ -1256,7 +1267,11 @@ public final class UIUtils {
             list.add(c.getString(R.string.bus_options_menu_edit_reminder));
         }
 
-        list.add(c.getString(R.string.bus_options_menu_show_only_this_route));
+        if (!hasRouteFilter) {
+            list.add(c.getString(R.string.bus_options_menu_show_only_this_route));
+        } else {
+            list.add(c.getString(R.string.bus_options_menu_show_all_routes));
+        }
 
         if (hasUrl) {
             list.add(c.getString(R.string.bus_options_menu_show_route_schedule));
@@ -1269,6 +1284,14 @@ public final class UIUtils {
             list.add(c.getString(R.string.join_discussion));
         }
 
+        if (occupancy != null) {
+            if (occupancyState == OccupancyState.HISTORICAL) {
+                list.add(c.getString(R.string.menu_title_about_historical_occupancy));
+            } else {
+                list.add(c.getString(R.string.menu_title_about_occupancy));
+            }
+        }
+
         return list;
     }
 
@@ -1279,9 +1302,10 @@ public final class UIUtils {
      * @param isRouteFavorite   true if this route is a user favorite, false if it is not
      * @param hasUrl true if the route provides a URL for schedule data, false if it does
      *               not
+     * @param occupancy occupancy of this trip
      * @return the array of icons that should be shown for a given trip
      */
-    public static List<Integer> buildTripOptionsIcons(boolean isRouteFavorite, boolean hasUrl) {
+    public static List<Integer> buildTripOptionsIcons(boolean isRouteFavorite, boolean hasUrl, Occupancy occupancy) {
         ArrayList<Integer> list = new ArrayList<>();
         if (!isRouteFavorite) {
             list.add(R.drawable.focus_star_on);
@@ -1299,6 +1323,9 @@ public final class UIUtils {
         ObaRegion currentRegion = Application.get().getCurrentRegion();
         if (currentRegion != null && EmbeddedSocialUtils.isSocialEnabled()) {
             list.add(R.drawable.es_ic_comment);
+        }
+        if (occupancy != null) {
+            list.add(R.drawable.ic_occupancy);
         }
         return list;
     }
@@ -1424,19 +1451,22 @@ public final class UIUtils {
 
     /**
      * Returns a list of all situations (service alerts) that are specific to the stop, routes, and
-     * agency
-     * for the provided arrivals-and-departures-for-stop response.  For route-specific alerts, this
+     * agency for the provided arrivals-and-departures-for-stop response.  For route-specific alerts, this
      * involves looping through the routes and checking the references element to see if there are
      * any route-specific alerts, and adding them to the list to be shown above the list of
-     * arrivals
-     * for a stop.  See #700.
+     * arrivals for a stop.  See #700.
      *
      * @param response response from arrivals-and-departures-for-stop API
+     * @param filter   list of route_ids to retrieve service alerts for, or null to retrieve service
+     *                 alerts for all routes. Note that this filter only affects alerts scoped to
+     *                 routes - it does not affect alerts scoped to stops or agencies
      * @return a list of all situations (service alerts) that are specific to the stop, routes, and
-     * agency
-     * for the provided arrivals-and-departures-for-stop response.  See #700.
+     * agency. If a route filter list is provided, situations for all stops and agencies are included
+     * in the returned list, but only situations scoped for route_ids in the provided filter list are
+     * included in the returned list (i.e., situations specified for route_ids that aren't in the
+     * filter list are excluded).
      */
-    public static List<ObaSituation> getAllSituations(final ObaArrivalInfoResponse response) {
+    public static List<ObaSituation> getAllSituations(final ObaArrivalInfoResponse response, List<String> filter) {
         List<ObaSituation> allSituations = new ArrayList<>();
         // Add agency-wide and stop-specific alerts
         allSituations.addAll(response.getSituations());
@@ -1447,13 +1477,25 @@ public final class UIUtils {
             allIds.add(s.getId());
         }
 
+        // Do the same for filtered routes
+        HashSet<String> filterIds = new HashSet<>();
+        if (filter != null && !filter.isEmpty()) {
+            for (String routeId : filter) {
+                filterIds.add(routeId);
+            }
+        }
+
         // Scan through the routes, and if a route-specific situation hasn't been added yet, add it
+        // If a filter list exists and a route_id is not included in the filter list, don't included
+        // it's situations in the returned list.
         ObaArrivalInfo[] info = response.getArrivalInfo();
         for (ObaArrivalInfo i : info) {
-            for (String situationId : i.getSituationIds()) {
-                if (!allIds.contains(situationId)) {
-                    allIds.add(situationId);
-                    allSituations.add(response.getSituation(situationId));
+            if (filterIds.isEmpty() || filterIds.contains(i.getRouteId())) {
+                for (String situationId : i.getSituationIds()) {
+                    if (!allIds.contains(situationId)) {
+                        allIds.add(situationId);
+                        allSituations.add(response.getSituation(situationId));
+                    }
                 }
             }
         }
@@ -1482,7 +1524,8 @@ public final class UIUtils {
         for (ObaSituation.ActiveWindow activeWindow : situation.getActiveWindows()) {
             long from = activeWindow.getFrom();
             long to = activeWindow.getTo();
-            if (from <= currentTimeSeconds && currentTimeSeconds <= to) {
+            // 0 is a valid end time that means no end to the window - see #990
+            if (from <= currentTimeSeconds && (to == 0 || currentTimeSeconds <= to)) {
                 isActiveWindowForSituation = true;
                 break;
             }
@@ -1749,19 +1792,17 @@ public final class UIUtils {
             // Launch installed app
             intent.addCategory(Intent.CATEGORY_LAUNCHER);
             activity.startActivity(intent);
-            ObaAnalytics
-                    .reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                            Application.get().getString(R.string.analytics_action_button_press),
-                            Application.get().getString(R.string.analytics_label_button_press_pay_fare_open_app));
+            ObaAnalytics.reportUiEvent(FirebaseAnalytics.getInstance(activity),
+                    Application.get().getString(R.string.analytics_label_button_fare_payment),
+                    Application.get().getString(R.string.analytics_label_open_app));
         } else {
             // Go to Play Store listing to download app
             intent = new Intent(Intent.ACTION_VIEW);
             intent.setData(Uri.parse(Application.get().getString(R.string.google_play_listing_prefix, region.getPaymentAndroidAppId())));
             activity.startActivity(intent);
-            ObaAnalytics
-                    .reportEventWithCategory(ObaAnalytics.ObaEventCategory.UI_ACTION.toString(),
-                            Application.get().getString(R.string.analytics_action_button_press),
-                            Application.get().getString(R.string.analytics_label_button_press_pay_fare_download_app));
+            ObaAnalytics.reportUiEvent(FirebaseAnalytics.getInstance(activity),
+                    Application.get().getString(R.string.analytics_label_button_fare_payment),
+                    Application.get().getString(R.string.analytics_label_download_app));
         }
     }
 
@@ -1787,7 +1828,7 @@ public final class UIUtils {
         Drawable icon = activity.getResources().getDrawable(android.R.drawable.ic_dialog_alert);
         DrawableCompat.setTint(icon, activity.getResources().getColor(R.color.alert_icon_error));
 
-        android.support.v7.app.AlertDialog.Builder builder = new android.support.v7.app.AlertDialog.Builder(activity)
+        androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(activity)
                 .setTitle(region.getPaymentWarningTitle())
                 .setIcon(icon)
                 .setCancelable(false)
@@ -1797,5 +1838,185 @@ public final class UIUtils {
                 );
 
         builder.create().show();
+    }
+
+    /**
+     * Shows the dialog to explain why location permissions are needed.  If this provided activity
+     * can't manage dialogs then this method is a no-op.
+     *
+     * NOTE - this dialog can't be managed under the old dialog framework as the method
+     * ActivityCompat.shouldShowRequestPermissionRationale() always returns false.
+     */
+    public static void showLocationPermissionDialog(@NonNull Fragment fragment) {
+        if (!canManageDialog(fragment.getActivity())) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getActivity())
+                .setTitle(R.string.location_permissions_title)
+                .setMessage(R.string.location_permissions_message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.ok,
+                        (dialog, which) -> {
+                            // Request permissions from the user
+                            fragment.requestPermissions(LOCATION_PERMISSIONS, LOCATION_PERMISSION_REQUEST);
+                        }
+                )
+                .setNegativeButton(R.string.no_thanks,
+                        (dialog, which) -> {
+                            // No-op
+                        }
+                );
+        builder.create().show();
+    }
+
+    /**
+     * Sets the visibility and colors of the silhouettes in the provided occupancy.xml viewgroup
+     *  @param v         occupancy.xml layout viewgroup containing the silhouettes
+     * @param occupancy the occupancy value to use to set the silhouette visibility
+     * @param occupancyState the state of the occupancy to use to set the silhouette color
+     */
+    public static void setOccupancyVisibilityAndColor(ViewGroup v, Occupancy occupancy, OccupancyState occupancyState) {
+        ImageView silhouette1 = v.findViewById(R.id.silhouette1);
+        silhouette1.setVisibility(View.INVISIBLE);
+        ImageView silhouette2 = v.findViewById(R.id.silhouette2);
+        silhouette2.setVisibility(View.INVISIBLE);
+        ImageView silhouette3 = v.findViewById(R.id.silhouette3);
+        silhouette3.setVisibility(View.INVISIBLE);
+
+        // Hide the entire view group if occupancy is null
+        if (occupancy == null) {
+            v.setVisibility(View.GONE);
+            return;
+        } else {
+            v.setVisibility(View.VISIBLE);
+        }
+
+        int silhouetteColor;
+        int backgroundColor;
+        if (occupancyState == OccupancyState.HISTORICAL) {
+            silhouetteColor = Application.get().getResources().getColor(R.color.stop_info_occupancy_historical);
+            backgroundColor = Application.get().getResources().getColor(R.color.stop_info_occupancy_background_historical);
+        } else {
+            silhouetteColor = Application.get().getResources().getColor(R.color.stop_info_occupancy_predicted);
+            backgroundColor = Application.get().getResources().getColor(R.color.stop_info_occupancy_background_predicted);
+        }
+
+        // Below switch continues into following cases to minimize number of setVisibility() calls
+        switch (occupancy) {
+            case NOT_ACCEPTING_PASSENGERS:
+                // 3 icons
+            case FULL:
+                // 3 icons
+            case CRUSHED_STANDING_ROOM_ONLY:
+                // 3 icons
+                silhouette3.setVisibility(View.VISIBLE);
+                if (occupancyState == OccupancyState.PREDICTED || occupancyState == OccupancyState.REALTIME) {
+                    // Highlight packed vehicles based on real-time data with a different color
+                    silhouetteColor = Application.get().getResources().getColor(R.color.stop_info_occupancy_predicted_full);
+                    backgroundColor = Application.get().getResources().getColor(R.color.stop_info_occupancy_background_predicted_full);
+                }
+            case STANDING_ROOM_ONLY:
+                // 2 icons
+                silhouette2.setVisibility(View.VISIBLE);
+            case FEW_SEATS_AVAILABLE:
+                // 1 icon
+            case MANY_SEATS_AVAILABLE:
+                // 1 icon
+                silhouette1.setVisibility(View.VISIBLE);
+            case EMPTY:
+                // 0 icons
+        }
+
+        // Set silhouette colors
+        ImageViewCompat.setImageTintList(silhouette1, ColorStateList.valueOf(silhouetteColor));
+        ImageViewCompat.setImageTintList(silhouette2, ColorStateList.valueOf(silhouetteColor));
+        ImageViewCompat.setImageTintList(silhouette3, ColorStateList.valueOf(silhouetteColor));
+
+        // Set background color
+        v.setBackgroundResource(R.drawable.occupancy_background);
+        GradientDrawable d = (GradientDrawable) v.getBackground();
+        d.setColor(backgroundColor);
+    }
+
+    /**
+     * Sets the content description of the occupancy view group based on the provided occupancy
+     *
+     * @param v              occupancy.xml layout viewgroup containing the silhouettes
+     * @param occupancy      the occupancy value to use to set the content description
+     * @param occupancyState the state of the occupancy
+     */
+    public static void setOccupancyContentDescription(ViewGroup v, Occupancy occupancy, OccupancyState occupancyState) {
+        // Hide the entire view group if occupancy is null
+        if (occupancy == null) {
+            v.setContentDescription("");
+            return;
+        }
+
+        int stringId = R.string.historically_full;
+
+        // Below switch continues into following cases to minimize lines of code
+        switch (occupancy) {
+            case NOT_ACCEPTING_PASSENGERS:
+                // "Full"
+            case FULL:
+                // "Full"
+            case CRUSHED_STANDING_ROOM_ONLY:
+                // "Full"
+                if (occupancyState == OccupancyState.HISTORICAL) {
+                    stringId = R.string.historically_full;
+                } else if (occupancyState == OccupancyState.REALTIME) {
+                    stringId = R.string.realtime_full;
+                } else if (occupancyState == OccupancyState.PREDICTED) {
+                    stringId = R.string.predicted_full;
+                }
+                break;
+            case STANDING_ROOM_ONLY:
+                // "Standing room"
+                if (occupancyState == OccupancyState.HISTORICAL) {
+                    stringId = R.string.historically_standing_room;
+                } else if (occupancyState == OccupancyState.REALTIME) {
+                    stringId = R.string.realtime_standing_room;
+                } else if (occupancyState == OccupancyState.PREDICTED) {
+                    stringId = R.string.predicted_standing_room;
+                }
+                break;
+            case FEW_SEATS_AVAILABLE:
+                // "Standing room"
+            case MANY_SEATS_AVAILABLE:
+                // "Standing room"
+                if (occupancyState == OccupancyState.HISTORICAL) {
+                    stringId = R.string.historically_seats_available;
+                } else if (occupancyState == OccupancyState.REALTIME) {
+                    stringId = R.string.realtime_seats_available;
+                } else if (occupancyState == OccupancyState.PREDICTED) {
+                    stringId = R.string.predicted_seats_available;
+                }
+                break;
+            case EMPTY:
+                // "Empty"
+                if (occupancyState == OccupancyState.HISTORICAL) {
+                    stringId = R.string.historically_empty;
+                } else if (occupancyState == OccupancyState.REALTIME) {
+                    stringId = R.string.realtime_empty;
+                } else if (occupancyState == OccupancyState.PREDICTED) {
+                    stringId = R.string.predicted_empty;
+                }
+                break;
+        }
+
+        v.setContentDescription(Application.get().getString(stringId));
+    }
+
+    /**
+     * Asks the user to whitelist the application for energy restrictions (e.g., running in
+     * the background). See https://developer.android.com/training/monitoring-device-state/doze-standby#support_for_other_use_cases
+     *
+     * @param activity
+     */
+    public static void openBatteryIgnoreIntent(Activity activity) {
+        Intent intent = new Intent();
+        intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+        intent.setData(Uri.parse("package:" + activity.getPackageName()));
+        activity.startActivity(intent);
     }
 }

@@ -30,8 +30,9 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.Settings;
-import android.support.v4.app.NotificationCompat;
 import android.text.TextUtils;
+
+import androidx.core.app.NotificationCompat;
 
 /**
  * A task (thread) that is responsible for generating a Notification to remind the user of an
@@ -138,7 +139,7 @@ public final class NotifierTask implements Runnable {
                                             String notifyText,
                                             PendingIntent contentIntent,
                                             PendingIntent deleteIntent) {
-        NotificationCompat.Builder notifyBuilder = new NotificationCompat.Builder(mContext);
+        NotificationCompat.Builder notifyBuilder = new NotificationCompat.Builder(mContext, Application.CHANNEL_ARRIVAL_REMINDERS_ID);
 
         notifyBuilder.setSmallIcon(R.drawable.ic_stat_notification)
                 .setOnlyAlertOnce(true)

@@ -15,8 +15,6 @@
  */
 package org.onebusaway.android.io.test;
 
-import android.text.format.Time;
-
 import org.junit.Test;
 import org.onebusaway.android.UriAssert;
 import org.onebusaway.android.app.Application;
@@ -27,9 +25,11 @@ import org.onebusaway.android.io.request.ObaScheduleForStopRequest;
 import org.onebusaway.android.io.request.ObaScheduleForStopResponse;
 import org.onebusaway.android.mock.MockRegion;
 
+import android.text.format.Time;
+
 import java.util.HashMap;
 
-import static android.support.test.InstrumentationRegistry.getTargetContext;
+import static androidx.test.InstrumentationRegistry.getTargetContext;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNotNull;
 import static junit.framework.Assert.assertTrue;
@@ -61,7 +61,7 @@ public class ScheduleForStopTest extends ObaTestCase {
                 new ObaScheduleForStopRequest.Builder(getTargetContext(), "1_75403")
                         .build();
         UriAssert.assertUriMatch(
-                "http://api.pugetsound.onebusaway.org/api/where/schedule-for-stop/1_75403.json",
+                "https://api.pugetsound.onebusaway.org/api/where/schedule-for-stop/1_75403.json",
                 new HashMap<String, String>() {{
                     put("key", "*");
                     put("version", "2");
@@ -115,7 +115,7 @@ public class ScheduleForStopTest extends ObaTestCase {
                         .setDate(time)
                         .build();
         UriAssert.assertUriMatch(
-                "http://api.pugetsound.onebusaway.org/api/where/schedule-for-stop/1_75403.json",
+                "https://api.pugetsound.onebusaway.org/api/where/schedule-for-stop/1_75403.json",
                 new HashMap<String, String>() {{
                     put("date", "2012-07-30");
                     put("key", "*");

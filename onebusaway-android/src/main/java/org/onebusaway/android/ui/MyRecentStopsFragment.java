@@ -15,14 +15,9 @@
  */
 package org.onebusaway.android.ui;
 
-import org.onebusaway.android.R;
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.provider.ObaContract;
-
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.content.Loader;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
@@ -30,6 +25,11 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView.AdapterContextMenuInfo;
+
+import org.onebusaway.android.R;
+import org.onebusaway.android.provider.ObaContract;
+
+import androidx.loader.content.Loader;
 
 
 public class MyRecentStopsFragment extends MyStopListFragmentBase {
@@ -52,12 +52,6 @@ public class MyRecentStopsFragment extends MyStopListFragmentBase {
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
         setHasOptionsMenu(true);
-    }
-
-    @Override
-    public void onStart() {
-        ObaAnalytics.reportFragmentStart(this);
-        super.onStart();
     }
 
     @Override

@@ -15,15 +15,15 @@
  */
 package org.onebusaway.android.ui;
 
-import org.onebusaway.android.io.ObaAnalytics;
-import org.onebusaway.android.util.UIUtils;
-
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.v4.app.FragmentManager;
-import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
+
+import org.onebusaway.android.util.UIUtils;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.FragmentManager;
 
 public class RegionsActivity extends AppCompatActivity {
     /*
@@ -59,12 +59,6 @@ public class RegionsActivity extends AppCompatActivity {
 
             fm.beginTransaction().add(android.R.id.content, list).commit();
         }
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        ObaAnalytics.reportActivityStart(this);
     }
 
     @Override

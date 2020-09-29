@@ -65,6 +65,8 @@ public final class ObaTripStatusElement implements ObaTripStatus, Serializable {
 
     private final int blockTripSequence;
 
+    private final String realtimeOccupancy;
+
     ObaTripStatusElement() {
         serviceDate = 0;
         predicted = false;
@@ -87,6 +89,7 @@ public final class ObaTripStatusElement implements ObaTripStatus, Serializable {
         lastLocationUpdateTime = null;
         lastKnownOrientation = null;
         blockTripSequence = 0;
+        realtimeOccupancy = "";
     }
 
     @Override
@@ -164,9 +167,12 @@ public final class ObaTripStatusElement implements ObaTripStatus, Serializable {
         return phase;
     }
 
+    /**
+     * @return The status modifiers for the trip, defined by {@link Status}. Can be null.
+     */
     @Override
-    public String getStatus() {
-        return status;
+    public Status getStatus() {
+        return Status.fromString(status);
     }
 
     @Override
@@ -192,5 +198,13 @@ public final class ObaTripStatusElement implements ObaTripStatus, Serializable {
     @Override
     public int getBlockTripSequence() {
         return blockTripSequence;
+    }
+
+    /**
+     * @return the current realtime occupancy of this vevhicle, or null if the occupancy is unknown
+     */
+    @Override
+    public Occupancy getRealtimeOccupancy() {
+        return Occupancy.fromString(realtimeOccupancy);
     }
 }

@@ -15,6 +15,8 @@
  */
 package org.onebusaway.android.ui;
 
+import com.google.android.material.tabs.TabLayout;
+
 import org.onebusaway.android.R;
 import org.onebusaway.android.app.Application;
 import org.onebusaway.android.directions.model.Direction;
@@ -27,14 +29,14 @@ import org.onebusaway.android.map.MapParams;
 import org.onebusaway.android.map.googlemapsv2.BaseMapFragment;
 import org.opentripplanner.api.model.Itinerary;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.DrawableRes;
-import android.support.design.widget.TabLayout;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -49,6 +51,10 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+
+import androidx.annotation.DrawableRes;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 
 public class TripResultsFragment extends Fragment {
 
@@ -331,10 +337,19 @@ public class TripResultsFragment extends Fragment {
 
             mDirectionsListView.setGroupIndicator(null);
 
-            if(Application.getPrefs()
-                    .getBoolean(getString(R.string.preference_key_trip_plan_notifications), true)) {
+            Context context = Application.get().getApplicationContext();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                NotificationChannel channel = manager.getNotificationChannel(Application.CHANNEL_TRIP_PLAN_UPDATES_ID);
+                if(channel.getImportance() != NotificationManager.IMPORTANCE_NONE){
+                    RealtimeService.start(getActivity(), getArguments());
+                }
+            } else {
+                if (Application.getPrefs()
+                        .getBoolean(getString(R.string.preference_key_trip_plan_notifications), true)) {
 
-                RealtimeService.start(getActivity(), getArguments());
+                    RealtimeService.start(getActivity(), getArguments());
+                }
             }
         }
 

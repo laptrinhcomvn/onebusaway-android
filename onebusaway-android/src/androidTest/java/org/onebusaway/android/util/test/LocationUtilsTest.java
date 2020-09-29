@@ -16,12 +16,6 @@
 
 package org.onebusaway.android.util.test;
 
-import android.location.Location;
-import android.os.Build;
-import android.os.SystemClock;
-import android.support.test.runner.AndroidJUnit4;
-import android.util.Log;
-
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -33,12 +27,21 @@ import org.junit.runner.RunWith;
 import org.onebusaway.android.app.Application;
 import org.onebusaway.android.io.test.ObaTestCase;
 import org.onebusaway.android.util.LocationUtils;
+import org.onebusaway.android.util.PermissionUtils;
 import org.onebusaway.android.util.TestUtils;
 
-import static android.support.test.InstrumentationRegistry.getTargetContext;
+import android.location.Location;
+import android.os.Build;
+import android.os.SystemClock;
+import android.util.Log;
+
+import androidx.test.runner.AndroidJUnit4;
+
+import static androidx.test.InstrumentationRegistry.getTargetContext;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertNotNull;
 import static junit.framework.Assert.assertTrue;
+import static org.onebusaway.android.util.PermissionUtils.LOCATION_PERMISSIONS;
 
 /**
  * Tests to evaluate location utilities
@@ -48,8 +51,8 @@ public class LocationUtilsTest extends ObaTestCase {
 
     public static final String TAG = "LocationUtilTest";
 
-    public static final long FRESH_LOCATION_THRESHOLD_MS = 1000 * 60 * 30;
-            // Within last 30 minutes - see #737
+    public static final long FRESH_LOCATION_THRESHOLD_MS = 1000 * 60 * 60 * 24;
+            // Within last 24 hours - see #737
 
     /**
      * GoogleApiClient being used for Location Services
@@ -196,7 +199,7 @@ public class LocationUtilsTest extends ObaTestCase {
         Location loc;
 
         // Make sure we're not running on an emulator, since we'll get a null location there
-        if (!TestUtils.isRunningOnEmulator()) {
+        if (!TestUtils.isRunningOnEmulator() && PermissionUtils.hasGrantedPermissions(getTargetContext(), LOCATION_PERMISSIONS)) {
             /**
              * Test without Google Play Services - should be a Location API v1 location.
              * Typically this is "gps" or "network", but some devices (e.g., HTC EVO LTE)
@@ -223,7 +226,8 @@ public class LocationUtilsTest extends ObaTestCase {
         GoogleApiAvailability api = GoogleApiAvailability.getInstance();
         if (api.isGooglePlayServicesAvailable(getTargetContext())
                 == ConnectionResult.SUCCESS &&
-                !TestUtils.isRunningOnEmulator()) {
+                !TestUtils.isRunningOnEmulator() &&
+                PermissionUtils.hasGrantedPermissions(getTargetContext(), LOCATION_PERMISSIONS)) {
             /**
              * Could return either a fused or Location API v1 location
              */
@@ -233,6 +237,49 @@ public class LocationUtilsTest extends ObaTestCase {
                     "Location Provider for Location Services test is '" + loc.getProvider() + "'");
             assertFreshLocation(loc);
         }
+    }
+
+    @Test
+    public void testIsDuplicate() {
+        Location locA = new Location("A");
+        locA.setTime(1234);
+        locA.setLatitude(33.3);
+        locA.setLongitude(66.6);
+
+        /**
+         * Test location that is the same
+         */
+
+        Location locDupA = new Location("A");
+        locDupA.setTime(1234);
+        locDupA.setLatitude(33.3);
+        locDupA.setLongitude(66.6);
+
+        assertTrue(LocationUtils.isDuplicate(locA, locDupA));
+
+        /**
+         * Test locations that aren't the same
+         */
+        Location locBTimeDiff = new Location("A");
+        locBTimeDiff.setTime(9876);
+        locBTimeDiff.setLatitude(33.3);
+        locBTimeDiff.setLongitude(66.6);
+
+        assertFalse(LocationUtils.isDuplicate(locA, locBTimeDiff));
+
+        Location locBLatDiff = new Location("A");
+        locBLatDiff.setTime(1234);
+        locBLatDiff.setLatitude(89.9);
+        locBLatDiff.setLongitude(66.6);
+
+        assertFalse(LocationUtils.isDuplicate(locA, locBLatDiff));
+
+        Location locBLonDiff = new Location("A");
+        locBLonDiff.setTime(1234);
+        locBLonDiff.setLatitude(33.3);
+        locBLonDiff.setLongitude(10.0);
+
+        assertFalse(LocationUtils.isDuplicate(locA, locBLonDiff));
     }
 
     /**
